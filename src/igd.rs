@@ -1,0 +1,70 @@
+use std::net::{IpAddr, SocketAddr};
+
+use anyhow::{Result, anyhow};
+pub use igd_next::PortMappingProtocol;
+pub use igd_next::aio::Gateway;
+use igd_next::aio::tokio::Tokio;
+pub use igd_next::aio::tokio::search_gateway;
+use tokio::sync::Mutex;
+use tracing::debug;
+
+struct PortMapping {
+    protocol: PortMappingProtocol,
+    external_port: u16,
+}
+
+pub struct GatewayExt {
+    gw: Gateway<Tokio>,
+    mappings: Mutex<Vec<PortMapping>>,
+}
+
+impl GatewayExt {
+    pub async fn search() -> Result<Self> {
+        Ok(Self {
+            gw: search_gateway(Default::default()).await?,
+            mappings: Mutex::new(Vec::new()),
+        })
+    }
+
+    pub async fn add_port(
+        &self,
+        protocol: PortMappingProtocol,
+        external_port: u16,
+        local_addr: SocketAddr,
+    ) -> anyhow::Result<()> {
+        self.gw
+            .add_port(protocol, external_port, local_addr, 3600, "revshell")
+            .await?;
+
+        self.mappings.lock().await.push(PortMapping {
+            protocol,
+            external_port,
+        });
+
+        Ok(())
+    }
+
+    pub async fn get_external_ip(&self) -> Result<IpAddr> {
+        self.gw
+            .get_external_ip()
+            .await
+            .map_err(|_| anyhow!("failed to get external ip"))
+    }
+
+    pub async fn cleanup(self) {
+        let mappings = self.mappings.lock().await;
+        for mapping in mappings.iter() {
+            let PortMapping {
+                protocol,
+                external_port,
+                ..
+            } = *mapping;
+
+            debug!("removing port mapping: external_port={external_port}");
+            let res = self.gw.remove_port(protocol, external_port).await;
+            if res.is_err() {
+                debug!("failed to remove port mapping: external_port={external_port}");
+            }
+        }
+    }
+}
