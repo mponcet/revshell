@@ -1,14 +1,14 @@
 use crate::nonblocking_stdin;
 
 use std::io::Result;
-use std::net::SocketAddr;
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::Arc;
 use std::time::Duration;
 
 use tokio::io::{AsyncReadExt, AsyncWriteExt, BufWriter};
 use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
 use tokio::sync::Notify;
-use tracing::{debug, error};
+use tracing::{debug, error, info};
 
 struct Connection {
     addr: SocketAddr,
@@ -44,7 +44,7 @@ impl Connection {
                 else => break,
             }
         }
-        debug!("connection from {} terminated", self.addr);
+        info!("connection from {} terminated", self.addr);
 
         Ok(())
     }
@@ -67,7 +67,7 @@ impl Server {
         loop {
             // accept() errors are non recoverable.
             let (stream, addr) = self.listener.accept().await?;
-            debug!("new connection from: {addr}");
+            info!("new connection from: {addr}");
 
             let mut connection = Connection {
                 addr,
@@ -95,8 +95,9 @@ impl Server {
     }
 }
 
-pub async fn run() -> Result<()> {
-    let mut server = Server::try_new("0.0.0.0:8888").await?;
+pub async fn run(bind_port: u16) -> Result<()> {
+    let bind_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), bind_port);
+    let mut server = Server::try_new(bind_addr).await?;
 
     tokio::select! {
         res = server.run() => {
