@@ -1,0 +1,43 @@
+# RevShell
+
+A reverse shell tool written in Rust that leverages UPnP for port forwarding. Useful for CTF (Capture The Flag) challenges and penetration testing scenarios.
+
+## Features
+
+- Automatic UPnP port forwarding
+- TCP server for reverse shell connections
+- Configurable host and port mapping
+- Cleanup of port mapping on exit
+
+## Usage
+
+```bash
+revshell -H <host_ip> -p <external_port>:<internal_port>
+```
+
+### Arguments
+
+- `-H, --host`: The local IP address to bind the server to
+- `-p, --port`: Port mapping in format `external_port:internal_port`
+
+### Example
+
+```bash
+revshell -H 192.168.1.100 -p 8080:4444
+```
+
+This will:
+1. Forward external port 8080 to internal port 4444 using UPnP
+2. Start a TCP server listening on 192.168.1.100:4444
+3. Display your external IP address
+4. Clean up the port mapping when the program exits
+
+## Install
+
+```bash
+cargo install --path .
+```
+
+## License
+
+MIT License - see [LICENSE](LICENSE) file for details
