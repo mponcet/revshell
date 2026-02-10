@@ -26,7 +26,7 @@ impl Connection {
         loop {
             let Connection { stream, .. } = self;
 
-            let mut buffer = [0u8; 128];
+            let mut buffer = [0u8; 1024];
             tokio::select! {
                 Ok(n)  = stream.read(&mut buffer) => {
                     if n == 0 {
@@ -80,9 +80,7 @@ impl Server for TcpServer {
                 shutdown: self.notify_shutdown.clone(),
             };
 
-            tokio::spawn(async move {
-                let _ = connection.handle().await;
-            });
+            connection.handle().await?;
         }
     }
 
