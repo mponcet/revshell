@@ -8,9 +8,20 @@ use igd_next::aio::tokio::Tokio;
 pub use igd_next::aio::tokio::search_gateway;
 use tracing::debug;
 
+use crate::Protocol;
+
 struct PortMapping {
     protocol: PortMappingProtocol,
     external_port: u16,
+}
+
+impl From<Protocol> for PortMappingProtocol {
+    fn from(protocol: Protocol) -> Self {
+        match protocol {
+            Protocol::Tcp => PortMappingProtocol::TCP,
+            Protocol::Udp => PortMappingProtocol::UDP,
+        }
+    }
 }
 
 pub struct GatewayExt {
@@ -28,10 +39,11 @@ impl GatewayExt {
 
     pub async fn add_port(
         &self,
-        protocol: PortMappingProtocol,
+        protocol: Protocol,
         external_port: u16,
         local_addr: SocketAddr,
     ) -> anyhow::Result<()> {
+        let protocol = protocol.into();
         self.gw
             .add_port(protocol, external_port, local_addr, 3600, "revshell")
             .await?;

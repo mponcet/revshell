@@ -1,14 +1,16 @@
 mod igd;
 mod nonblocking_stdin;
 mod server;
+mod tcp;
+mod udp;
 
 use std::net::{IpAddr, SocketAddr};
 
 use crate::igd::GatewayExt;
+use crate::server::Protocol;
 
 use anyhow::{Result, anyhow, bail};
 use clap::Parser;
-use igd::PortMappingProtocol;
 use tracing::{Level, info};
 
 #[derive(Parser, Debug)]
@@ -19,6 +21,9 @@ struct Args {
 
     #[arg(short = 'p', long, value_parser = parse_port_mapping, required = true)]
     port: (u16, u16),
+
+    #[arg(long, default_value = "tcp", value_parser = parse_protocol)]
+    protocol: Protocol,
 }
 
 fn parse_host(host: &str) -> Result<IpAddr> {
@@ -35,6 +40,14 @@ fn parse_port_mapping(s: &str) -> Result<(u16, u16)> {
     Ok((external, internal))
 }
 
+fn parse_protocol(s: &str) -> Result<Protocol> {
+    Ok(match s {
+        "udp" => Protocol::Udp,
+        "tcp" => Protocol::Tcp,
+        _ => bail!("protocol must be either tcp or udp"),
+    })
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt().with_max_level(Level::INFO).init();
@@ -44,13 +57,14 @@ async fn main() -> anyhow::Result<()> {
     let gw = GatewayExt::search().await?;
     let (external_port, internal_port) = args.port;
     let local_addr = SocketAddr::new(args.host, internal_port);
-    gw.add_port(PortMappingProtocol::TCP, external_port, local_addr)
+
+    gw.add_port(args.protocol, external_port, local_addr)
         .await?;
 
     let external_ip = gw.get_external_ip().await?;
     info!("Your external ip: {external_ip}");
 
-    let _ = server::run(internal_port).await;
+    let _ = server::run(internal_port, args.protocol).await;
 
     gw.cleanup().await;
 
