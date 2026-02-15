@@ -16,7 +16,6 @@ pub enum Protocol {
 #[async_trait]
 pub trait Server {
     async fn run(&mut self) -> Result<()>;
-    async fn shutdown(self: Box<Self>);
 }
 
 pub async fn run(bind_port: u16, protocol: Protocol) -> Result<()> {
@@ -34,7 +33,6 @@ pub async fn run(bind_port: u16, protocol: Protocol) -> Result<()> {
         }
         _ = tokio::signal::ctrl_c() => {
             debug!("shutting down");
-            server.shutdown().await;
         }
     }
 

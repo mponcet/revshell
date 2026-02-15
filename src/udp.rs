@@ -2,20 +2,16 @@ use crate::nonblocking_stdin;
 use crate::server::Server;
 
 use std::net::SocketAddr;
-use std::sync::Arc;
-use std::time::Duration;
 
 use anyhow::Result;
 use async_trait::async_trait;
 use tokio::io::AsyncWriteExt;
 use tokio::net::{ToSocketAddrs, UdpSocket};
-use tokio::sync::Notify;
 use tracing::info;
 
 pub struct UdpServer {
     socket: UdpSocket,
     client_addr: Option<SocketAddr>,
-    notify_shutdown: Arc<Notify>,
 }
 
 impl UdpServer {
@@ -24,7 +20,6 @@ impl UdpServer {
         Ok(Self {
             socket,
             client_addr: None,
-            notify_shutdown: Arc::new(Notify::new()),
         })
     }
 }
@@ -57,9 +52,6 @@ impl Server for UdpServer {
                         self.socket.send_to(b"\n", addr).await?;
                     }
                 }
-                _ = self.notify_shutdown.notified() => {
-                    break;
-                }
                 else => break,
             }
         }
@@ -71,14 +63,4 @@ impl Server for UdpServer {
         Ok(())
     }
 
-    async fn shutdown(self: Box<Self>) {
-        let UdpServer {
-            notify_shutdown, ..
-        } = *self;
-
-        while Arc::strong_count(&notify_shutdown) != 1 {
-            notify_shutdown.notify_waiters();
-            tokio::time::sleep(Duration::from_millis(10)).await;
-        }
-    }
 }

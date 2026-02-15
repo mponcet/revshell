@@ -2,21 +2,16 @@ use crate::nonblocking_stdin;
 use crate::server::Server;
 
 use std::net::SocketAddr;
-use std::sync::Arc;
-use std::time::Duration;
 
 use anyhow::Result;
 use async_trait::async_trait;
 use tokio::io::{AsyncReadExt, AsyncWriteExt, BufWriter};
 use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
-use tokio::sync::Notify;
 use tracing::info;
 
 struct Connection {
     addr: SocketAddr,
     stream: BufWriter<TcpStream>,
-    // Receive shutdown notificaton from server
-    shutdown: Arc<Notify>,
 }
 
 impl Connection {
@@ -40,9 +35,6 @@ impl Connection {
                     stream.write_u8(b'\n').await?;
                     stream.flush().await?;
                 }
-                _ = self.shutdown.notified() => {
-                    break;
-                }
                 else => break,
             }
         }
@@ -54,14 +46,12 @@ impl Connection {
 
 pub struct TcpServer {
     listener: TcpListener,
-    notify_shutdown: Arc<Notify>,
 }
 
 impl TcpServer {
     pub async fn try_new(addr: impl ToSocketAddrs) -> Result<Self> {
         Ok(Self {
             listener: TcpListener::bind(addr).await?,
-            notify_shutdown: Arc::new(Notify::new()),
         })
     }
 }
@@ -77,23 +67,10 @@ impl Server for TcpServer {
             let mut connection = Connection {
                 addr,
                 stream: BufWriter::new(stream),
-                shutdown: self.notify_shutdown.clone(),
             };
 
             connection.handle().await?;
         }
     }
 
-    async fn shutdown(self: Box<Self>) {
-        let TcpServer {
-            notify_shutdown, ..
-        } = *self;
-
-        // Once all connections have received the shutdown notification,
-        // the Arc count decreases to 1 (Server is the last owner).
-        while Arc::strong_count(&notify_shutdown) != 1 {
-            notify_shutdown.notify_waiters();
-            tokio::time::sleep(Duration::from_millis(10)).await;
-        }
-    }
 }
